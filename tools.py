@@ -12,7 +12,3 @@ def gather_all(input_dir='input/'):
     print("Gathered %d files" % len(names))
 
     return names
-
-
-def average(datas):
-    return

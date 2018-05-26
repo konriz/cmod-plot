@@ -1,6 +1,3 @@
-import Plotter
-
-
 class CmodData:
     def __init__(self):
 
@@ -8,22 +5,8 @@ class CmodData:
         self.source = None
         self.valid = False
 
-        # store every step of measurement
-        self.total_force = []
-        self.total_cmod = []
-
-        # points for CMOD calculations
-        self.cmod_limits = [0.5, 1.5, 2.5, 3.5]
-
-        # difference between current CMOD and limit
-        self.cmod_diff = [10, 10, 10, 10]
-
-        # CMOD force
-        self.cmod_force = [0, 0, 0, 0]
-        # CMOD for step
-        self.cmod_value = [0, 0, 0, 0]
-        # Limit of Proportionality
-        self.lop = 0
+        # store every step of measurement where [0] is cmod and [1] is force
+        self.curve = [[], []]
 
     def analyse(self, sad_file):
         self.source = sad_file
@@ -37,7 +20,7 @@ class CmodData:
         last_cmod = -1.0
         for value in self.source.values:
 
-            # calculate mean of CMODs - stop when over 5
+            # calculate mean of CMODs
             cmod = (float(value[4]) + float(value[5]) + float(value[6]) + float(value[7])) / 4.0
 
             # deletes measurement flaws
@@ -48,41 +31,57 @@ class CmodData:
             # cuts plot at 5 mm
             if cmod > 5.0:
                 print(self.source.name + " calculated to 5 mm")
-                return
+                return self
 
-            self.total_cmod.append(cmod)
+            self.curve[0].append(cmod)
 
             # calculate force as sum of reactions
             force = float(value[1]) + float(value[2])
-            self.total_force.append(force)
+            self.curve[1].append(force)
 
-            # calculate lop
-            if (cmod < 0.05) and (force > self.lop):
-                self.lop = force
-
-            # check if CMOD limit is reached
-            for i in range(4):
-                diff = abs(cmod - self.cmod_limits[i])
-                if diff < self.cmod_diff[i]:
-                    self.cmod_diff[i] = diff
-                    self.cmod_force[i] = force
-                    self.cmod_value[i] = cmod
         return self
+
+    def calculate_cmod(self):
+        limits = [0.5, 1.5, 2.5, 3.5]
+        results = []
+        for limit in limits:
+            result = self.find_force(limit)
+            results.append(result)
+        return results
+
+    def calculate_lop(self):
+        for i in range(len(self.curve[0])):
+            if self.curve[0][i] > 0.05:
+                return max(self.curve[1][0:i])
+
+    def extract_curve(self):
+
+        x_data = self.curve[0]
+        y_data = self.curve[1]
+        name = self.source.name
+        return [x_data, y_data, name]
 
     def report(self):
         if not self.valid:
             print("No data to report")
 
-        results = "LOP = {1}\n" \
-                  "CMOD1 = {0[0]}\n" \
-                  "CMOD2 = {0[1]}\n" \
-                  "CMOD3 = {0[2]}\n" \
-                  "CMOD4 = {0[3]}\n".format(self.cmod_force, self.lop)
+        results = "LOP = {lop}\n" \
+                  "CMOD1 = {cmod[0]}\n" \
+                  "CMOD2 = {cmod[1]}\n" \
+                  "CMOD3 = {cmod[2]}\n" \
+                  "CMOD4 = {cmod[3]}\n".format(lop=self.calculate_lop(), cmod=self.calculate_cmod())
 
         output_file = open(self.source.output_dir + self.source.name + "_result.asc", "w+")
         output_file.write(results)
         output_file.close()
         print(self.source.name + " saved to file\n")
 
-    def plot(self):
-        Plotter.plot([self.total_cmod, self.total_force])
+    def find_force(self, cmod):
+
+        for i in range(len(self.curve[0])):
+            dif = abs(cmod - self.curve[0][i])
+
+            if 0.01 > dif:
+                return [self.curve[0][i], self.curve[1][i]]
+
+        print("Value at {cmod} not found".format(cmod=cmod))

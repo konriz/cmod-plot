@@ -1,4 +1,7 @@
-import Calculator
+from Calculator import *
 import tools
 
-Calculator.plot([tools.gather_all()[0]])
+data_set = create_data_set(tools.gather_all())
+
+report(data_set)
+plot(data_set)
